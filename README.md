@@ -1,135 +1,298 @@
-# Jenkins CI/CD Pipeline with Maven 3.9 and Docker
+# Jenkins CI/CD Pipeline with Maven and Docker
+
+A multi-stage Jenkins CI/CD pipeline that automates Java application packaging, Docker image creation, authenticated Docker Hub access, and container image publishing.
+
+The project demonstrates the progression from manually configured Jenkins jobs into a structured pipeline workflow where multiple software delivery stages execute as a single automated process.
+
+---
 
 ## Project Overview
 
-This project demonstrates the creation and execution of a multi-stage Jenkins CI/CD Pipeline that automates Java application packaging, Docker image creation, Docker Hub authentication, and container image publishing.
+The objective was to automate the build and container publishing portions of the application delivery lifecycle.
 
-The project represents a progression from Jenkins Freestyle jobs into a structured Pipeline workflow where multiple stages of the software delivery process are defined and executed as a single automated process.
+The implemented workflow includes:
 
-The completed pipeline includes:
-
-- Maven 3.9 application build and packaging
-- Multi-stage Jenkins Pipeline execution
-- Docker image creation
-- Jenkins-managed Docker Hub credentials
-- Secure Docker registry authentication
-- Automated Docker image publishing
-- Pipeline execution validation
-- External verification of the published container image
+* Maven 3.9 application build
+* Jenkins Pipeline execution
+* Docker image creation
+* Jenkins-managed Docker Hub credentials
+* secure registry authentication
+* automated Docker image publishing
+* pipeline validation
+* external Docker Hub verification
 
 The Jenkins environment used for this project runs as a Docker container on a DigitalOcean Ubuntu server.
 
----
-
-## Business Context
-
-Modern software teams need reliable and repeatable processes for transforming application source code into deployable software.
-
-Manually building applications, creating container images, authenticating with registries, and publishing images introduces unnecessary operational effort and increases the possibility of inconsistent builds.
-
-CI/CD platforms such as Jenkins automate these activities.
-
-This project demonstrates how Jenkins can coordinate Maven and Docker operations through a multi-stage Pipeline, allowing application builds and container publishing to execute as part of a single automated workflow.
+The deployment stage currently exists as a placeholder and does not perform an actual application deployment.
 
 ---
 
-## Technologies
-
-- Jenkins
-- Jenkins Pipeline
-- Maven 3.9
-- Java
-- Docker
-- Docker Hub
-- Jenkins Credentials
-- Groovy
-- Linux
-- DigitalOcean
-- Git
-- GitHub
-- CI/CD
-
----
-
-# Pipeline Architecture
+## Architecture
 
 ```text
-                  Jenkins Pipeline
-                         |
-                         v
-                +----------------+
-                |   Build App    |
-                +-------+--------+
-                        |
-                        v
-                mvn clean package
-                        |
-                        v
-                +----------------+
-                |  Build Image   |
-                +-------+--------+
-                        |
-                        v
-                   docker build
-                        |
-                        v
-               Jenkins Credentials
-                        |
-                        v
-                  Docker Login
-                        |
-                        v
-                   docker push
-                        |
-                        v
-                    Docker Hub
-                        |
-                        v
-               Published Container
-                     Image
-                        |
-                        v
-                +----------------+
-                |     Deploy     |
-                +-------+--------+
-                        |
-                        v
-                   Placeholder
+Application Source
+       |
+       v
+ Jenkins Pipeline
+       |
+       v
+  Maven Build
+       |
+       v
+ Application JAR
+       |
+       v
+ Docker Build
+       |
+       v
+Container Image
+       |
+       v
+Jenkins Credentials
+       |
+       v
+ Docker Hub Login
+       |
+       v
+  Docker Push
+       |
+       v
+   Docker Hub
 ```
 
 ---
 
-# Jenkins Pipeline Creation
+## Technology Stack
 
-A new Jenkins Pipeline item was created and named:
-
-```text
-my-pipeline
-```
-
-Unlike the previous Jenkins Freestyle workflow, this project defines multiple stages within a Jenkins Pipeline script.
-
-The Pipeline contains three primary stages:
-
-```text
-build app
-build image
-deploy
-```
-
-![Jenkins Pipeline Script](screenshots/01-jenkins-pipeline-script.png)
+| Technology          | Purpose                         |
+| ------------------- | ------------------------------- |
+| Jenkins             | CI/CD orchestration             |
+| Jenkins Pipeline    | Multi-stage workflow definition |
+| Maven 3.9           | Java build and packaging        |
+| Java                | Application runtime             |
+| Docker              | Container image creation        |
+| Docker Hub          | Container registry              |
+| Jenkins Credentials | Registry credential management  |
+| Groovy              | Pipeline syntax                 |
+| Linux               | Jenkins host environment        |
+| DigitalOcean        | Jenkins infrastructure          |
+| Git / GitHub        | Source control                  |
 
 ---
 
-# Pipeline Configuration
+## Engineering Decisions
 
-The Jenkins Pipeline used for this project is represented in the repository as:
+### Pipeline-Based Automation
+
+The project moved beyond Jenkins Freestyle jobs into a structured Pipeline workflow.
+
+Instead of configuring isolated build steps manually through the Jenkins UI, the delivery process was separated into logical stages:
 
 ```text
-Jenkinsfile
+Build Application
+       ↓
+Build Container Image
+       ↓
+Publish Container Image
+       ↓
+Deployment Placeholder
 ```
 
-The Pipeline uses Jenkins Declarative Pipeline syntax.
+This creates a foundation for Pipeline as Code and more advanced CI/CD workflows.
+
+---
+
+### Build Before Containerization
+
+The Java application is packaged before Docker builds the container image.
+
+The Maven stage executes:
+
+```bash
+mvn clean package
+```
+
+This ensures that the Docker image is created from a newly generated application artifact rather than depending on an unknown existing build.
+
+---
+
+### Jenkins-Managed Credentials
+
+Docker Hub authentication information is not hard-coded into the pipeline.
+
+Jenkins references the configured credential:
+
+```text
+docker-hub-repo
+```
+
+and exposes the username and password only while the relevant pipeline steps are executing.
+
+Authentication uses:
+
+```bash
+echo $PASS | docker login -u $USER --password-stdin
+```
+
+This avoids placing the password directly in the Docker login command or storing it in GitHub.
+
+---
+
+### External Validation
+
+A Jenkins `SUCCESS` status alone was not treated as proof that the workflow completed correctly.
+
+After pipeline execution, Docker Hub was independently inspected to verify that the expected container image had actually been published.
+
+---
+
+## Pipeline Workflow
+
+The implemented pipeline contains three stages.
+
+### 1. Build Application
+
+Jenkins uses the configured Maven 3.9 installation to execute:
+
+```bash
+mvn clean package
+```
+
+This compiles and packages the Java application.
+
+---
+
+### 2. Build and Publish Docker Image
+
+After the Maven build succeeds, Jenkins creates the container image:
+
+```bash
+docker build -t ejones904/demo-app:jma2.0 .
+```
+
+The pipeline then authenticates to Docker Hub using Jenkins-managed credentials and publishes the image:
+
+```bash
+docker push ejones904/demo-app:jma2.0
+```
+
+The resulting image is:
+
+```text
+ejones904/demo-app:jma2.0
+```
+
+---
+
+### 3. Deploy
+
+The pipeline includes a deployment stage:
+
+```groovy
+stage('deploy') {
+    steps {
+        script {
+            echo 'deploying docker image...'
+        }
+    }
+}
+```
+
+This stage is intentionally a placeholder in this project.
+
+The implemented automation stops after successfully publishing the Docker image.
+
+Actual remote deployment is handled in later portfolio projects.
+
+---
+
+## Pipeline Execution
+
+The documented successful execution occurred during:
+
+```text
+Build #7
+```
+
+The pipeline successfully progressed through all configured stages.
+
+![Successful Jenkins Pipeline](screenshots/02-successful-pipeline-stages.png)
+
+The complete console output is preserved at:
+
+```text
+build-logs/build-07-success-console-output.txt
+```
+
+Detailed implementation steps are preserved in [`IMPLEMENTATION.md`](IMPLEMENTATION.md).
+
+---
+
+## Validation
+
+The workflow was validated at several layers.
+
+### Application Build
+
+Jenkins successfully executed:
+
+```bash
+mvn clean package
+```
+
+confirming that the Java application could be built and packaged through the pipeline.
+
+---
+
+### Container Build
+
+Jenkins successfully created:
+
+```text
+ejones904/demo-app:jma2.0
+```
+
+using Docker.
+
+---
+
+### Registry Authentication
+
+Docker Hub authentication completed using credentials stored and injected by Jenkins.
+
+No registry password was stored directly in the pipeline source.
+
+---
+
+### Container Publishing
+
+Jenkins successfully pushed the image to Docker Hub.
+
+The resulting image was then independently verified in the remote registry.
+
+![Docker Hub Published Image](screenshots/03-docker-hub-pipeline-image.png)
+
+This validates the implemented delivery path:
+
+```text
+Application
+    ↓
+Maven Build
+    ↓
+Docker Build
+    ↓
+Authenticated Push
+    ↓
+Docker Hub
+```
+
+---
+
+## Pipeline Configuration
+
+The workflow is represented in the repository through the `Jenkinsfile`.
+
+The primary structure is:
 
 ```groovy
 pipeline {
@@ -142,557 +305,185 @@ pipeline {
     stages {
         stage('build app') {
             steps {
-                script {
-                    echo 'building the application...'
-                    sh 'mvn clean package'
-                }
+                sh 'mvn clean package'
             }
         }
 
         stage('build image') {
             steps {
-                script {
-                    echo "building the docker image..."
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'docker-hub-repo',
-                            passwordVariable: 'PASS',
-                            usernameVariable: 'USER'
-                        )
-                    ]) {
-                        sh "docker build -t ejones904/demo-app:jma2.0 ."
-                        sh 'echo $PASS | docker login -u $USER --password-stdin'
-                        sh "docker push ejones904/demo-app:jma2.0"
-                    }
-                }
+                // Docker build, authentication, and push
             }
         }
 
         stage('deploy') {
             steps {
-                script {
-                    echo 'deploying docker image...'
-                }
+                // Deployment placeholder
             }
         }
     }
 }
 ```
 
+This separates the build lifecycle into clear stages and establishes the structure needed for future deployment automation.
+
 ---
 
-# Stage 1 — Build Application
+## Security Considerations
 
-The first Pipeline stage is:
+Security practices implemented in this project include:
+
+* Docker Hub credentials stored in Jenkins
+* credential references instead of hard-coded secrets
+* temporary credential injection during execution
+* Docker authentication using `--password-stdin`
+* no Docker Hub passwords stored in the repository
+* no authentication secrets intentionally included in screenshots or build logs
+
+For a production implementation, additional controls would include:
+
+* scoped registry access tokens
+* credential rotation
+* least-privilege registry permissions
+* dedicated Jenkins agents
+* restricted Jenkins administrative access
+* centralized secrets management
+* TLS
+* network segmentation
+* isolated build environments
+
+---
+
+## Operational Considerations
+
+The pipeline currently uses a fixed Docker image tag:
 
 ```text
-build app
+jma2.0
 ```
 
-This stage executes:
+This is appropriate for demonstrating the publishing workflow but would not provide sufficient artifact traceability for a mature CI/CD system.
 
-```bash
-mvn clean package
-```
-
-using the Jenkins-managed Maven 3.9 installation configured as:
+A stronger implementation would generate unique image versions using values such as:
 
 ```text
-maven-3.9
+Application Version
++
+Jenkins Build Number
 ```
 
-The Pipeline declares this tool using:
-
-```groovy
-tools {
-    maven 'maven-3.9'
-}
-```
-
-The build stage:
-
-1. Starts with a clean Maven build environment.
-2. Resolves the required Maven dependencies.
-3. Compiles the Java application.
-4. Executes the Maven build lifecycle.
-5. Packages the application.
-
-The stage is defined as:
-
-```groovy
-stage('build app') {
-    steps {
-        script {
-            echo 'building the application...'
-            sh 'mvn clean package'
-        }
-    }
-}
-```
-
-This allows Jenkins to automatically prepare the Java application before containerization.
+That improvement is incorporated into later pipeline work.
 
 ---
 
-# Stage 2 — Build Docker Image
+## What This Project Demonstrates
 
-After the Maven build completes, Jenkins proceeds to:
+This project demonstrates practical experience with:
+
+* Jenkins Pipeline
+* CI/CD workflow design
+* Maven automation
+* Java application packaging
+* Docker image creation
+* Docker Hub
+* container registry authentication
+* Jenkins credential management
+* Groovy pipeline syntax
+* build validation
+* artifact publishing
+* Linux-hosted Jenkins infrastructure
+* pipeline stage separation
+
+---
+
+## Relationship to Other Projects
+
+This project represents an intermediate step in a larger progression:
 
 ```text
-build image
+Manual Application Deployment
+          ↓
+Jenkins Freestyle Job
+          ↓
+Jenkins CI/CD Pipeline
+          ↓
+Pipeline as Code
+          ↓
+Shared Libraries
+          ↓
+Multibranch CI/CD
+          ↓
+Automated AWS Deployment
 ```
 
-The Pipeline creates a Docker image using:
+The focus of this repository is specifically the **automated build and container publishing workflow**.
 
-```bash
-docker build -t ejones904/demo-app:jma2.0 .
-```
+Later projects extend this foundation into source-controlled pipelines, reusable Jenkins functions, multibranch execution, and AWS EC2 deployment.
 
-The resulting container image is tagged:
+---
+
+## Current Limitations
+
+The current implementation does not yet include:
+
+* actual application deployment
+* dynamic image versioning
+* automated source-control triggers
+* test reporting
+* vulnerability scanning
+* approval gates
+* rollback
+* multiple environments
+* infrastructure provisioning
+
+These limitations are intentionally documented rather than presenting the pipeline as a complete production CI/CD solution.
+
+---
+
+## Future Enhancements
+
+Potential improvements include:
+
+* execute the Jenkinsfile directly from SCM
+* automated source-control triggers
+* dynamic Docker image versioning
+* Nexus artifact publishing
+* automated tests
+* code-quality checks
+* container vulnerability scanning
+* actual application deployment
+* development, staging, and production environments
+* approval gates
+* build notifications
+* rollback procedures
+* Jenkins build agents
+* Infrastructure as Code
+
+---
+
+## Repository Documentation
+
+* [`README.md`](README.md) — engineering overview and pipeline design
+* [`IMPLEMENTATION.md`](IMPLEMENTATION.md) — detailed chronological implementation record
+* `build-logs/build-07-success-console-output.txt` — preserved successful build evidence
+
+---
+
+## Engineering Outcome
+
+This project converted several manual application-delivery activities into a single Jenkins-controlled workflow.
+
+The pipeline successfully automated:
 
 ```text
-ejones904/demo-app:jma2.0
+Java Build
+   ↓
+Application Packaging
+   ↓
+Docker Image Creation
+   ↓
+Registry Authentication
+   ↓
+Docker Image Publishing
 ```
 
-This identifies the Docker Hub repository and the image tag produced by this Pipeline execution.
-
----
-
-# Jenkins Credential Management
-
-Publishing the image requires Jenkins to authenticate with Docker Hub.
-
-Rather than storing Docker Hub authentication information directly inside the Pipeline, the credentials were configured through Jenkins.
-
-The credential is referenced using the credential ID:
-
-```text
-docker-hub-repo
-```
-
-The Pipeline accesses the credential using:
-
-```groovy
-withCredentials([
-    usernamePassword(
-        credentialsId: 'docker-hub-repo',
-        passwordVariable: 'PASS',
-        usernameVariable: 'USER'
-    )
-])
-```
-
-Jenkins temporarily makes the credential available during Pipeline execution through:
-
-```text
-USER
-PASS
-```
-
-The Pipeline then authenticates with Docker Hub using:
-
-```bash
-echo $PASS | docker login -u $USER --password-stdin
-```
-
-Using `--password-stdin` prevents the Docker Hub password from being passed directly as a command-line password argument.
-
-> No Docker Hub passwords, tokens, or other authentication secrets are stored in this repository.
-
----
-
-# Docker Image Publishing
-
-After successfully authenticating with Docker Hub, Jenkins executes:
-
-```bash
-docker push ejones904/demo-app:jma2.0
-```
-
-This publishes the image created by the Pipeline to the remote Docker Hub container registry.
-
-The automated workflow is:
-
-```text
-Java Application
-       |
-       v
-Maven 3.9
-       |
-       v
-mvn clean package
-       |
-       v
-Docker Build
-       |
-       v
-ejones904/demo-app:jma2.0
-       |
-       v
-Jenkins Credentials
-       |
-       v
-Docker Hub Login
-       |
-       v
-Docker Push
-       |
-       v
-Docker Hub
-```
-
----
-
-# Stage 3 — Deploy
-
-The final Pipeline stage is:
-
-```text
-deploy
-```
-
-The current implementation contains:
-
-```groovy
-stage('deploy') {
-    steps {
-        script {
-            echo 'deploying docker image...'
-        }
-    }
-}
-```
-
-At this stage of the project, the deployment stage is intentionally a placeholder.
-
-The Pipeline currently automates the application build, container image creation, Docker Hub authentication, and image publishing portions of the CI/CD process.
-
-Future development can extend this stage to deploy the generated container image to a target environment.
-
----
-
-# Successful Pipeline Execution
-
-The documented successful Pipeline execution occurred during:
-
-```text
-Build #7
-```
-
-Jenkins successfully executed all three configured stages.
-
-![Successful Jenkins Pipeline](screenshots/02-successful-pipeline-stages.png)
-
-The complete Jenkins Console Output was preserved:
-
-[Build #7 Console Output](build-logs/build-07-success-console-output.txt)
-
----
-
-# Build #7 Execution Flow
-
-The successful build followed this sequence:
-
-```text
-START
-  |
-  v
-Jenkins Pipeline
-  |
-  v
-build app
-  |
-  v
-Maven 3.9
-  |
-  v
-mvn clean package
-  |
-  v
-Application Packaged
-  |
-  v
-build image
-  |
-  v
-docker build
-  |
-  v
-ejones904/demo-app:jma2.0
-  |
-  v
-Load Jenkins Credentials
-  |
-  v
-Docker Hub Authentication
-  |
-  v
-docker push
-  |
-  v
-Docker Hub
-  |
-  v
-deploy
-  |
-  v
-Deployment Placeholder
-  |
-  v
-SUCCESS
-```
-
----
-
-# Docker Hub Validation
-
-After Build #7 completed successfully, Docker Hub was inspected to verify the external result of the Pipeline.
-
-The container image:
-
-```text
-ejones904/demo-app:jma2.0
-```
-
-was successfully available in the Docker Hub repository.
-
-![Docker Hub Pipeline Image](screenshots/03-docker-hub-pipeline-image.png)
-
-This provides external validation that the Pipeline successfully completed the container publishing process.
-
-```text
-Jenkins
-   |
-   | docker push
-   v
-Docker Hub
-   |
-   v
-ejones904/demo-app:jma2.0
-```
-
----
-
-# Project Validation
-
-The Pipeline was validated at multiple levels.
-
-## Application Build
-
-Jenkins successfully executed:
-
-```bash
-mvn clean package
-```
-
-using Maven 3.9, confirming that the application could be built and packaged through the Pipeline.
-
-## Container Build
-
-Jenkins successfully executed:
-
-```bash
-docker build -t ejones904/demo-app:jma2.0 .
-```
-
-confirming that the application could be packaged into a Docker image.
-
-## Registry Authentication
-
-Jenkins successfully authenticated with Docker Hub using Jenkins-managed credentials.
-
-## Registry Publishing
-
-Jenkins successfully executed:
-
-```bash
-docker push ejones904/demo-app:jma2.0
-```
-
-## External Validation
-
-Docker Hub was inspected and the resulting `jma2.0` image was confirmed in the remote repository.
-
-Together, these checks validated the implemented workflow rather than relying only on the Jenkins `SUCCESS` status.
-
----
-
-# Security Considerations
-
-Credential management is an important component of CI/CD automation.
-
-This project uses Jenkins-managed credentials rather than hard-coding Docker Hub authentication information directly into the Pipeline.
-
-Security practices demonstrated include:
-
-- Docker Hub credentials stored in Jenkins
-- Credentials referenced through a Jenkins credential ID
-- Temporary credential injection during Pipeline execution
-- Docker authentication using `--password-stdin`
-- No passwords stored in the Jenkinsfile
-- No passwords stored in GitHub
-- No authentication secrets intentionally exposed in screenshots
-- No authentication secrets intentionally exposed in preserved build logs
-
-A production environment could further improve security through:
-
-- Scoped Docker Hub access tokens
-- Credential rotation
-- Least-privilege registry permissions
-- Restricted Jenkins administrative access
-- Dedicated Jenkins build agents
-- HTTPS/TLS
-- Centralized secrets management
-- Network segmentation
-- Build environment isolation
-
----
-
-# Freestyle Jobs vs Jenkins Pipeline
-
-This project represents a progression from Jenkins Freestyle jobs into Pipeline-based CI/CD automation.
-
-A Freestyle job allows individual build actions to be configured primarily through the Jenkins user interface.
-
-A Jenkins Pipeline allows multiple stages of the CI/CD workflow to be defined together as code.
-
-```text
-Freestyle Job
-     |
-     v
-GUI-configured
-build steps
-
-       VS
-
-Jenkins Pipeline
-     |
-     v
-Structured multi-stage
-CI/CD workflow
-```
-
-This provides a foundation for Pipeline as Code, where CI/CD definitions can ultimately be version controlled alongside application source code.
-
----
-
-# Key Achievements
-
-- Created and configured a Jenkins Pipeline project.
-- Defined a multi-stage CI/CD workflow.
-- Configured Jenkins to use Maven 3.9.
-- Automated Java application building and packaging.
-- Automated Docker image creation.
-- Created the `ejones904/demo-app:jma2.0` container image.
-- Integrated Jenkins-managed Docker Hub credentials.
-- Authenticated with Docker Hub during Pipeline execution.
-- Automated Docker image publishing to Docker Hub.
-- Successfully completed Jenkins Build #7.
-- Verified the resulting image directly in Docker Hub.
-- Preserved Jenkins Console Output as technical build evidence.
-- Separated application build, container creation, and deployment into distinct Pipeline stages.
-- Established a deployment stage for future automation.
-
----
-
-# Skills Demonstrated
-
-- Jenkins
-- Jenkins Pipeline
-- CI/CD
-- Pipeline Automation
-- Groovy
-- Maven 3.9
-- Java
-- Docker
-- Docker Hub
-- Docker Image Management
-- Container Registries
-- Jenkins Credentials
-- Credential Management
-- Build Automation
-- Application Packaging
-- Containerization
-- Linux
-- DigitalOcean
-- Git
-- GitHub
-- Technical Documentation
-
----
-
-# Build Evidence
-
-The complete Console Output from the documented successful Pipeline execution is included:
-
-```text
-build-logs/
-└── build-07-success-console-output.txt
-```
-
-The build log provides technical evidence of the successful Pipeline execution and associated build operations.
-
----
-
-# Screenshots
-
-| Screenshot | Description |
-|---|---|
-| `01-jenkins-pipeline-script.png` | Jenkins Pipeline configuration and Pipeline script |
-| `02-successful-pipeline-stages.png` | Successful Jenkins Build #7 and Pipeline stages |
-| `03-docker-hub-pipeline-image.png` | `jma2.0` container image successfully published to Docker Hub |
-
----
-
-# Repository Structure
-
-```text
-jenkins-cicd-pipeline/
-│
-├── Jenkinsfile
-├── README.md
-├── .gitignore
-│
-├── build-logs/
-│   └── build-07-success-console-output.txt
-│
-└── screenshots/
-    ├── 01-jenkins-pipeline-script.png
-    ├── 02-successful-pipeline-stages.png
-    └── 03-docker-hub-pipeline-image.png
-```
-
----
-
-# Future Improvements
-
-The current Pipeline automates the application build and container publishing stages of the CI/CD lifecycle.
-
-Future improvements could include:
-
-- Execute the Pipeline directly from SCM
-- Trigger Jenkins automatically from source-control changes
-- Implement dynamic Docker image versioning
-- Publish Maven artifacts to Nexus
-- Publish container images to a private registry
-- Add automated test reporting
-- Add code-quality checks
-- Add container vulnerability scanning
-- Implement an actual deployment target
-- Create development, staging, and production environments
-- Add approval gates
-- Add build notifications
-- Implement rollback procedures
-- Introduce Jenkins build agents
-- Provision deployment infrastructure using Infrastructure as Code
-
-A logical next step would be configuring Jenkins to retrieve and execute the version-controlled `Jenkinsfile` directly from the application's source repository.
-
----
-
-## Author
-
-**Ethan Jones**
-
-Cloud & DevOps Portfolio
+The result established the foundation for the more advanced CI/CD work that followed, while keeping the boundaries of the current implementation clear: the image publishing workflow is automated, but actual deployment is not yet implemented in this repository.
